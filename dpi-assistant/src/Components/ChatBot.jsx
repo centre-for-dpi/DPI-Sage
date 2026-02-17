@@ -41,12 +41,23 @@ const ChatBot = forwardRef((_, ref) => {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [persona] = useState("Default");
+
+  // New: ref for the scrollable messages container (we'll scroll this element only)
+  const messagesContainerRef = useRef(null);
+
+  // keep as sentinel if you still need it (not used to scroll the page)
   const messagesEndRef = useRef(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll the messages container to bottom when messages change.
+  // This uses scrollTop = scrollHeight so the *page* won't jump.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const el = messagesContainerRef.current;
+    if (el) {
+      // allow a micro-delay for layout to settle (optional)
+      // but avoid using element.scrollIntoView which can trigger page scrolling
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages, isLoading]);
 
   useImperativeHandle(ref, () => ({
     handleExternalQuestion(question) {
@@ -185,7 +196,6 @@ const ChatBot = forwardRef((_, ref) => {
   if (messages.length === 0) {
     return (
       <div className="lg:max-w-[1212px] font-outfit mx-auto flex flex-col items-center bg-gradient-to-r from-fuchsia-50 to-purple-100 px-6 pb-10 pt-4">
-
         {/* ⭐ DISCLAIMER on Landing */}
         <Disclaimer />
 
@@ -236,13 +246,16 @@ const ChatBot = forwardRef((_, ref) => {
     <div className="font-outfit bg-gradient-to-r from-fuchsia-50 to-purple-100 px-6 py-6 lg:max-w-[1212px] mx-auto rounded-2xl">
       <div className="bg-white rounded-2xl shadow-sm flex flex-col min-h-[500px] max-h-[700px]">
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div
+          ref={messagesContainerRef}
+          // Important: overflow-anchor: none prevents browser auto-jump when content changes
+          style={{ overflowAnchor: "none" }}
+          className="flex-1 overflow-y-auto p-6 space-y-4"
+        >
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`flex ${
-                message.sender === "user" ? "justify-end" : "justify-start"
-              }`}
+              className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
             >
               <div
                 className={`max-w-[80%] ${
