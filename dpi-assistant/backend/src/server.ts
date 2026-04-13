@@ -437,6 +437,29 @@ function createModelConfig() {
   };
 }
 
+// Retry wrapper for Gemini API calls to handle transient 503/429 errors
+async function generateContentWithRetry(
+  prompt: string,
+  maxRetries: number = 3,
+  baseDelayMs: number = 2000
+): Promise<any> {
+  const { model, config } = createModelConfig();
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await genAINew.models.generateContent({ model, contents: prompt, config });
+    } catch (error: any) {
+      const status = error?.status || error?.code;
+      const isRetryable = status === 503 || status === 429;
+      if (!isRetryable || attempt === maxRetries) {
+        throw error;
+      }
+      const delay = baseDelayMs * Math.pow(2, attempt);
+      console.log(`⏳ Gemini API returned ${status}, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
 // Retrieve relevant context using vector search or fallback to full KB
 async function retrieveContext(query: string): Promise<string> {
   // If vector search is available, use it
@@ -589,12 +612,7 @@ app.get('/health/full', async (_req, res) => {
         persona: ''
       });
 
-      const { model, config } = createModelConfig();
-      const result = await genAINew.models.generateContent({
-        model,
-        contents: prompt,
-        config
-      });
+      const result = await generateContentWithRetry(prompt);
 
       const answer = result.text || '';
 
@@ -618,7 +636,7 @@ app.get('/health/full', async (_req, res) => {
         status: 'error',
         message: `Chat test failed: ${String(error)}`
       };
-      healthStatus.status = 'unhealthy';
+      healthStatus.status = 'degraded';
     }
   } else {
     healthStatus.checks.chat = {
@@ -672,13 +690,8 @@ app.post('/chat', async (req, res) => {
       persona: persona || ''
     });
 
-    // Generate response using new SDK with web search support
-    const { model, config } = createModelConfig();
-    const result = await genAINew.models.generateContent({
-      model,
-      contents: prompt,
-      config
-    });
+    // Generate response using new SDK with web search support (with retry for transient errors)
+    const result = await generateContentWithRetry(prompt);
 
     const answer = result.text || '';
 
@@ -734,12 +747,7 @@ app.post('/suggest-dpis', async (req, res) => {
       knowledgeBase: knowledgeBase
     });
 
-    const { model, config } = createModelConfig();
-    const result = await genAINew.models.generateContent({
-      model,
-      contents: prompt,
-      config
-    });
+    const result = await generateContentWithRetry(prompt);
 
     const rawAnswer = result.text || '';
 
@@ -787,12 +795,7 @@ app.post('/summarize', async (req, res) => {
       documentTitle: documentTitle || 'Untitled Document'
     });
 
-    const { model, config } = createModelConfig();
-    const result = await genAINew.models.generateContent({
-      model,
-      contents: prompt,
-      config
-    });
+    const result = await generateContentWithRetry(prompt);
 
     const summary = result.text || '';
 
