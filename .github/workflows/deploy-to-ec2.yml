@@ -93,6 +93,25 @@ jobs:
           PORT=8080
           EOF
 
+      - name: Free disk space on EC2
+        if: github.event_name == 'push'
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_IP }} << 'ENDSSH'
+            echo "🧹 Freeing disk space..."
+            echo "Disk usage before cleanup:"
+            df -h / | tail -1
+
+            # Remove leftover tar files from previous deployments
+            rm -f /home/ubuntu/dpi-assistant-*.tar.gz
+            rm -f /home/ubuntu/dpi-assistant/dpi-assistant-*.tar.gz
+
+            # Remove unused Docker images, containers, and build cache
+            docker system prune -af --volumes 2>/dev/null || true
+
+            echo "Disk usage after cleanup:"
+            df -h / | tail -1
+          ENDSSH
+
       - name: Upload images to EC2
         if: github.event_name == 'push'
         run: |
