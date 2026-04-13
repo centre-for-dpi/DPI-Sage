@@ -93,6 +93,19 @@ jobs:
           PORT=8080
           EOF
 
+      - name: Ensure Docker is running on EC2
+        if: github.event_name == 'push'
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_IP }} << 'ENDSSH'
+            if ! sudo systemctl is-active --quiet docker; then
+              echo "🔄 Docker is not running, starting it..."
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              sleep 5
+            fi
+            echo "✅ Docker is running: $(docker --version)"
+          ENDSSH
+
       - name: Free disk space on EC2
         if: github.event_name == 'push'
         run: |
