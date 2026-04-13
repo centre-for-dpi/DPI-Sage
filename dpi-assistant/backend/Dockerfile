@@ -4,7 +4,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install build dependencies for canvas and other native modules
-RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev
+RUN apk add --no-cache python3 make g++ cairo-dev jpeg-dev pango-dev giflib-dev pixman-dev
 
 # Copy package files
 COPY package*.json ./
@@ -20,19 +20,22 @@ COPY content ./content
 # Build TypeScript
 RUN npm run build
 
+# Prune devDependencies so only production deps remain
+RUN npm prune --omit=dev
+
 # Production stage
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install build and runtime dependencies for canvas and curl for health checks
-RUN apk add --no-cache curl python3 make g++ cairo cairo-dev jpeg jpeg-dev pango pango-dev giflib giflib-dev
+# Install runtime dependencies for canvas and curl for health checks
+RUN apk add --no-cache curl cairo pango giflib jpeg pixman
 
-# Copy package files
+# Copy package.json for metadata
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production
+# Copy pre-built node_modules from builder (already compiled for this platform)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built application from builder
 COPY --from=builder /app/lib ./lib
