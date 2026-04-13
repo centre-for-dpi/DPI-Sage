@@ -424,40 +424,52 @@ const answerPromptTemplate = loadPromptTemplate('answer-dpi-questions-prompt.md'
 const suggestDPIsPromptTemplate = loadPromptTemplate('suggest-relevant-dpis-prompt.md');
 const summarizeDocumentPromptTemplate = loadPromptTemplate('summarize-documents-prompt.md');
 
-// Create Gemini model with web search and temperature configuration using NEW SDK
-function createModelConfig() {
+// Gemini model configuration
+const PRIMARY_MODEL = 'gemini-2.5-flash';
+const FALLBACK_MODEL = 'gemini-2.5-flash-lite';
+
+// Create Gemini model config with web search and temperature
+function createModelConfig(model: string = PRIMARY_MODEL) {
   return {
-    model: 'gemini-2.5-flash',
+    model,
     config: {
       tools: [
         { googleSearch: {} } // Enable web search (Google Search grounding)
       ],
-      temperature: 0.7, // Set temperature between 0 and 0.7 for balanced creativity and accuracy
+      temperature: 0.7,
     }
   };
 }
 
-// Retry wrapper for Gemini API calls to handle transient 503/429 errors
+// Retry wrapper for Gemini API calls with fallback to lighter model
 async function generateContentWithRetry(
   prompt: string,
-  maxRetries: number = 3,
+  maxRetries: number = 2,
   baseDelayMs: number = 2000
 ): Promise<any> {
-  const { model, config } = createModelConfig();
+  // Try primary model with retries
+  const { model, config } = createModelConfig(PRIMARY_MODEL);
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await genAINew.models.generateContent({ model, contents: prompt, config });
     } catch (error: any) {
       const status = error?.status || error?.code;
       const isRetryable = status === 503 || status === 429;
-      if (!isRetryable || attempt === maxRetries) {
-        throw error;
-      }
+      if (!isRetryable || attempt === maxRetries) break;
       const delay = baseDelayMs * Math.pow(2, attempt);
-      console.log(`⏳ Gemini API returned ${status}, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+      console.log(`⏳ ${PRIMARY_MODEL} returned ${status}, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
+
+  // Fallback to lighter model
+  console.log(`⚡ Falling back to ${FALLBACK_MODEL}...`);
+  const fallback = createModelConfig(FALLBACK_MODEL);
+  return await genAINew.models.generateContent({
+    model: fallback.model,
+    contents: prompt,
+    config: fallback.config
+  });
 }
 
 // Retrieve relevant context using vector search or fallback to full KB
