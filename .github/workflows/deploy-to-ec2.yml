@@ -32,6 +32,7 @@ jobs:
         working-directory: ./dpi-assistant/backend
         run: |
           docker build --platform linux/amd64 \
+            --load \
             --cache-from type=gha \
             --cache-to type=gha,mode=max \
             -f Dockerfile.qdrant \
@@ -41,6 +42,7 @@ jobs:
         working-directory: ./dpi-assistant/backend
         run: |
           docker build --platform linux/amd64 \
+            --load \
             --cache-from type=gha \
             --cache-to type=gha,mode=max \
             -t dpi-assistant-backend .
@@ -49,6 +51,7 @@ jobs:
         working-directory: ./dpi-assistant
         run: |
           docker build --platform linux/amd64 \
+            --load \
             --cache-from type=gha \
             --cache-to type=gha,mode=max \
             -t dpi-assistant-frontend .
